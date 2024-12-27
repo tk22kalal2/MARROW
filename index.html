@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Editor</title>
+  <title>PDF Editor with Logs</title>
   <style>
     body {
       margin: 0;
@@ -103,49 +103,74 @@
     const dragContainer = document.getElementById('dragContainer');
     const downloadButton = document.getElementById('downloadPdf');
 
+    console.log("Script loaded successfully.");
+
     // Handle PDF Upload
     uploadPdfButton.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || file.type !== 'application/pdf') {
+        console.error('Invalid file type or no file selected.');
         alert('Please upload a valid PDF file.');
         return;
       }
 
+      console.log('PDF file selected:', file.name);
+
       const reader = new FileReader();
       reader.onload = function () {
+        console.log('File read successfully.');
         const typedarray = new Uint8Array(this.result);
-        pdfjsLib.getDocument(typedarray).promise.then((doc) => {
-          pdfDoc = doc;
-          renderPDF(pdfDoc);
-          pdfViewer.style.display = 'block';
-          splitPdfButton.style.display = 'inline-block';
-        });
+        pdfjsLib.getDocument(typedarray).promise
+          .then((doc) => {
+            console.log('PDF document loaded.');
+            pdfDoc = doc;
+            renderPDF(pdfDoc);
+            pdfViewer.style.display = 'block';
+            splitPdfButton.style.display = 'inline-block';
+          })
+          .catch((error) => {
+            console.error('Error loading PDF:', error);
+            alert('Error loading PDF. Please try again.');
+          });
       };
+
+      reader.onerror = function (error) {
+        console.error('FileReader error:', error);
+        alert('Error reading file. Please try again.');
+      };
+
       reader.readAsArrayBuffer(file);
     });
 
     // Render PDF Pages
     function renderPDF(pdf) {
       pdfViewer.innerHTML = ''; // Clear previous content
+      console.log('Rendering PDF with', pdf.numPages, 'pages.');
+
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         pdf.getPage(pageNum).then((page) => {
+          console.log('Rendering page', pageNum);
           const canvas = document.createElement('canvas');
           const viewport = page.getViewport({ scale: 1.5 });
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
 
-          // Render page to canvas
           page.render({
             canvasContext: ctx,
             viewport: viewport,
           }).promise.then(() => {
+            console.log('Page', pageNum, 'rendered successfully.');
             canvas.draggable = true; // Enable dragging
             canvas.addEventListener('dragstart', (event) => {
               event.dataTransfer.setData('text/plain', pageNum);
             });
             pdfViewer.appendChild(canvas);
+          }).catch((error) => {
+            console.error('Error rendering page', pageNum, ':', error);
           });
+        }).catch((error) => {
+          console.error('Error getting page', pageNum, ':', error);
         });
       }
     }
@@ -157,6 +182,7 @@
         return;
       }
 
+      console.log('Splitting PDF...');
       const splitPages = [];
       for (let i = 1; i <= pdfDoc.numPages; i += 2) {
         splitPages.push(i);
@@ -167,6 +193,7 @@
 
       pdfViewer.innerHTML = ''; // Clear previous preview
       renderPDF(splitDoc);
+      console.log('Split PDF preview rendered.');
     });
 
     // Drag and Drop Functionality
@@ -177,6 +204,7 @@
     dragContainer.addEventListener('drop', (event) => {
       event.preventDefault();
       const pageNum = event.dataTransfer.getData('text/plain');
+      console.log('Page', pageNum, 'dropped into container.');
       const droppedPage = document.createElement('div');
       droppedPage.textContent = `Page ${pageNum}`;
       droppedPage.style.border = '1px solid #ccc';
@@ -188,12 +216,14 @@
 
     // Download Edited PDF
     downloadButton.addEventListener('click', () => {
+      console.log('Downloading edited PDF...');
       const pdf = new jsPDF();
       const elements = dragContainer.querySelectorAll('div');
       elements.forEach((element, index) => {
         pdf.text(20, 20 + index * 10, element.textContent);
       });
       pdf.save('Edited_PDF.pdf');
+      console.log('Edited PDF downloaded.');
     });
   </script>
 </body>
