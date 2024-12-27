@@ -1,24 +1,190 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MBBS Quiz Platform</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Splitter & Editor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f4f4f9;
+    }
+
+    .container {
+      display: flex;
+      width: 90%;
+      height: 90%;
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      background: #fff;
+    }
+
+    .compartment {
+      width: 50%;
+      padding: 20px;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+    }
+
+    .compartment.right {
+      border-right: none;
+    }
+
+    h2, h3 {
+      margin-bottom: 15px;
+    }
+
+    .pdf-container {
+      border: 1px solid #ccc;
+      height: 300px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      background: #f8f8f8;
+      position: relative;
+    }
+
+    .drop-container {
+      height: 300px;
+      border: 2px dashed #aaa;
+      background: #f8f8f8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      text-align: center;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 10px 15px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
 </head>
 <body>
-    <button id="start-quiz">Start Quiz</button>
-    <div id="question-container">
-        <h2 id="question"></h2>
-        <ul id="options">
-            <!-- options will be generated dynamically -->
-        </ul>
-        <button id="submit-answer">Submit Answer</button>
-        <p id="explanation"></p>
+  <div class="container">
+    <!-- Left Side -->
+    <div class="compartment left">
+      <h2>Upload and Preview PDF</h2>
+      <input type="file" id="uploadPdf" accept="application/pdf">
+      <div id="pdfViewer" class="pdf-container"></div>
+      
+      <h3>Split PDF Preview</h3>
+      <div id="splitPdfViewer" class="pdf-container"></div>
     </div>
-    <div id="logs"></div>
 
-    <script src="script.js"></script>
+    <!-- Right Side -->
+    <div class="compartment right">
+      <h2>Selected Content</h2>
+      <div id="selectedContent" class="drop-container">
+        <p>Drag and drop selected parts here</p>
+      </div>
+      <button id="downloadPdf">Download as PDF</button>
+    </div>
+  </div>
+
+  <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+  <script>
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.js';
+
+    let pdfDoc = null;
+    const pdfViewer = document.getElementById('pdfViewer');
+    const splitPdfViewer = document.getElementById('splitPdfViewer');
+    const selectedContent = document.getElementById('selectedContent');
+
+    // Load and render PDF on file upload
+    document.getElementById('uploadPdf').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a valid PDF file');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function () {
+        const typedarray = new Uint8Array(this.result);
+        pdfjsLib.getDocument(typedarray).promise.then((doc) => {
+          pdfDoc = doc;
+          renderPDF(doc, pdfViewer);
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Render PDF pages
+    function renderPDF(pdf, container) {
+      container.innerHTML = ''; // Clear container before rendering
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        pdf.getPage(pageNum).then((page) => {
+          const canvas = document.createElement('canvas');
+          const viewport = page.getViewport({ scale: 1.5 });
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+
+          // Render the page into the canvas
+          page.render({
+            canvasContext: ctx,
+            viewport: viewport,
+          }).promise.then(() => {
+            canvas.classList.add('draggable');
+            canvas.setAttribute('draggable', 'true');
+            canvas.addEventListener('dragstart', dragStart);
+            container.appendChild(canvas);
+          });
+        });
+      }
+    }
+
+    // Drag and drop functionality
+    function dragStart(e) {
+      e.dataTransfer.setData('text/html', e.target.outerHTML);
+    }
+
+    selectedContent.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    selectedContent.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const content = e.dataTransfer.getData('text/html');
+      selectedContent.innerHTML += content;
+    });
+
+    // Download selected content as PDF
+    document.getElementById('downloadPdf').addEventListener('click', () => {
+      const pdf = new jsPDF();
+      const elements = selectedContent.querySelectorAll('canvas');
+
+      elements.forEach((canvas, index) => {
+        const imgData = canvas.toDataURL('image/jpeg');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        if (index < elements.length - 1) {
+          pdf.addPage();
+        }
+      });
+
+      pdf.save('Selected_Content.pdf');
+    });
+  </script>
 </body>
 </html>
